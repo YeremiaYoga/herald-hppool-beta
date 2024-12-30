@@ -257,14 +257,12 @@ async function setupHpPool() {
 
 async function herald_CreateHpPool() {
   const hasHpPool = canvas.scene.getFlag("world", "hasHpPool");
-
+  const existingHpPoolBar = document.getElementById("heraldHpPool");
   if (hasHpPool) {
-    const existingHpPoolBar = document.getElementById("heraldHpPool");
-    if (existingHpPoolBar) {
-      existingHpPoolBar.remove();
+    if (existingHpPoolBar != null && hasHpPool.show == true) {
+      return;
     }
   }
-
   const hp = hasHpPool.totalActorHpPool;
   const maxHp = hasHpPool.totalMaxHpPool;
   const hpPercent = (hp / maxHp) * 100;
@@ -326,6 +324,7 @@ async function hpPoolResetActor() {
   for (let actor of listActorSelected) {
     await actor.update({
       "system.attributes.hp.tempmax": 0,
+      // "system.attributes.hp.value": actor.system.attributes.hp.max - spreadDamage,
       "system.attributes.hp.value": hpActorValue,
     });
   }
@@ -346,9 +345,7 @@ async function herald_checkDamageHpPool() {
     listActorSelected.push(actor);
   }
   let totalDamagedActor = 0;
-  let totalHealActor = 0;
   let listDamagedActor = [];
-  let detectAction = "damage";
 
   for (let actor of listActorSelected) {
     if (actor.system.attributes.hp.value == hasHpPool.totalActorHpPool) {
@@ -357,9 +354,6 @@ async function herald_checkDamageHpPool() {
     if (actor.system.attributes.hp.value < hasHpPool.totalActorHpPool) {
       totalDamagedActor +=
         hasHpPool.totalActorHpPool - actor.system.attributes.hp.value;
-    }
-    if (actor.system.attributes.hp.value > hasHpPool.totalActorHpPool) {
-      totalHealActor = actor.system.attributes.hp.value;
     }
   }
 
@@ -375,16 +369,68 @@ async function herald_checkDamageHpPool() {
     });
   }
 
-  console.log(listDamagedActor);
-  console.log(totalDamagedActor);
+  const hpPercent = (finalActorHp/hasHpPool.totalMaxHpPool) *100;
+  const hpBar = div.querySelector("#heraldHpPool-hpbar");
+  const bghpBar = div.querySelector("#heraldHpPool-bghpbar");
+  hpBar.style.width = `${hpPercent}%`;
+  bghpBar.style.width = `${hpPercent}%`;
+}
+
+async function herald_checkHealHpPool() {
+  const hasHpPool = canvas.scene.getFlag("world", "hasHpPool");
+  const existingHpPoolBar = document.getElementById("heraldHpPool");
+  if (!existingHpPoolBar) {
+    return;
+  }
+  if (hasHpPool.show == false) {
+    return;
+  }
+
+  let listActorSelected = [];
+  for (let data of hasHpPool.arrActorUuid) {
+    const actor = await fromUuid(data);
+    listActorSelected.push(actor);
+  }
+  let totalHealActor = 0;
+  let listHealActor = [];
+
+  for (let actor of listActorSelected) {
+    if (actor.system.attributes.hp.value == hasHpPool.totalActorHpPool) {
+      listHealActor.push(actor);
+    }
+    if (actor.system.attributes.hp.value > hasHpPool.totalActorHpPool) {
+      totalHealActor +=
+        actor.system.attributes.hp.value - hasHpPool.totalActorHpPool;
+    }
+  }
+
+  let finalActorHp = hasHpPool.totalActorHpPool + totalHealActor;
+
+  await canvas.scene.setFlag("world", "hasHpPool", {
+    totalActorHpPool: finalActorHp,
+  });
+
+  for (let actor of listHealActor) {
+    await actor.update({
+      "system.attributes.hp.value": finalActorHp,
+    });
+  }
+
+  console.log(listHealActor);
+  console.log(totalHealActor);
+  const hpPercent = (finalActorHp/hasHpPool.totalMaxHpPool) *100;
+  const hpBar = document.getElementById("heraldHpPool-hpbar");
+  const bghpBar = document.getElementById("heraldHpPool-bghpbar");
+  hpBar.style.width = `${hpPercent}%`;
+  bghpBar.style.width = `${hpPercent}%`;
 }
 
 Hooks.on("updateActor", async (actor, data) => {
   const hasHpPool = canvas.scene.getFlag("world", "hasHpPool");
-  console.log(hasHpPool);
   if (hasHpPool) {
     if (hasHpPool.checker == true) {
       herald_checkDamageHpPool();
+      herald_checkHealHpPool();
     }
   }
 });
